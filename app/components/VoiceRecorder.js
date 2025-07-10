@@ -75,7 +75,7 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
         clearInterval(timerRef.current)
       }
     }
-  }, [])
+  }, [onRecordingComplete]);
 
   useEffect(() => {
     latestTranscriptRef.current = transcript
@@ -157,7 +157,7 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
           Browser Not Supported
         </h3>
         <p className="text-gray-600">
-          Your browser doesn't support the required APIs. Please use Chrome, Edge, or Safari.
+          Your browser doesn&apos;t support the required APIs. Please use Chrome, Edge, or Safari.
         </p>
       </div>
     )

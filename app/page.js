@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import VoiceRecorder from './components/VoiceRecorder'
 import TranscriptionDisplay from './components/TranscriptionDisplay'
 import SummaryDisplay from './components/SummaryDisplay'
@@ -16,13 +16,13 @@ export default function Home() {
   const [error, setError] = useState('')
   const [showTranscript, setShowTranscript] = useState(false)
 
-  const handleRecordingComplete = (blob, transcript) => {
+  const handleRecordingComplete = useCallback((blob, transcript) => {
     setAudioBlob(blob)
     setTranscription(transcript)
     const url = URL.createObjectURL(blob)
     setAudioUrl(url)
     setShowTranscript(true) // Show transcript and summarize button immediately
-  }
+  }, [])
 
   const handleSummarize = async () => {
     if (!transcription.trim()) {
