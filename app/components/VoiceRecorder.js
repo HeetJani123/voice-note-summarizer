@@ -71,6 +71,15 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       recognitionRef.current.onend = () => {
         setIsRecognitionStopped(true)
         
+        // If user is still recording, restart recognition (handles pauses)
+        if (isRecording && !pendingCompleteRef.current) {
+          try {
+            recognitionRef.current.start()
+          } catch (e) {
+            // Sometimes throws if already started, ignore
+          }
+          return
+        }
         // If recognition ended unexpectedly but we have audio, complete the recording
         if (pendingCompleteRef.current && audioChunksRef.current.length > 0) {
           completeRecording(latestTranscriptRef.current)
