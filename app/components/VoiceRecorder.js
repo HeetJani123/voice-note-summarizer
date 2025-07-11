@@ -18,6 +18,7 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
   const latestTranscriptRef = useRef('')
   const pendingCompleteRef = useRef(false)
   const hasFinalTranscriptRef = useRef(false)
+  const fullTranscriptRef = useRef('') // NEW: accumulate transcript
 
   useEffect(() => {
     // Check for browser support
@@ -49,12 +50,16 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
           }
         }
 
-        setTranscript(finalTranscript + interimTranscript)
-        latestTranscriptRef.current = finalTranscript + interimTranscript
+        // Accumulate final transcript
+        if (finalTranscript) {
+          fullTranscriptRef.current += finalTranscript
+        }
+        setTranscript(fullTranscriptRef.current + interimTranscript)
+        latestTranscriptRef.current = fullTranscriptRef.current + interimTranscript
 
         // If we are waiting for completion and this is the final result, call onRecordingComplete
         if (pendingCompleteRef.current && isFinal) {
-          completeRecording(finalTranscript + interimTranscript)
+          completeRecording(fullTranscriptRef.current + interimTranscript)
         }
       }
 
@@ -126,6 +131,7 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
     setRecordingError('')
     setTranscript('')
     hasFinalTranscriptRef.current = false
+    fullTranscriptRef.current = '' // NEW: reset accumulated transcript
     
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
