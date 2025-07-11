@@ -7,8 +7,6 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
   const [recordingTime, setRecordingTime] = useState(0)
   const [transcript, setTranscript] = useState('')
   const [recordingError, setRecordingError] = useState('')
-  const [debugMode, setDebugMode] = useState(false)
-  const [debugInfo, setDebugInfo] = useState({})
   
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
@@ -20,12 +18,6 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
   const latestTranscriptRef = useRef('')
   const pendingCompleteRef = useRef(false)
   const hasFinalTranscriptRef = useRef(false)
-
-  const updateDebugInfo = (info) => {
-    if (debugMode) {
-      setDebugInfo(prev => ({ ...prev, ...info }))
-    }
-  }
 
   useEffect(() => {
     // Check for browser support
@@ -60,17 +52,8 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
         setTranscript(finalTranscript + interimTranscript)
         latestTranscriptRef.current = finalTranscript + interimTranscript
 
-        updateDebugInfo({
-          finalTranscript,
-          interimTranscript,
-          isFinal,
-          resultIndex: event.resultIndex,
-          resultsLength: event.results.length
-        })
-
         // If we are waiting for completion and this is the final result, call onRecordingComplete
         if (pendingCompleteRef.current && isFinal) {
-          updateDebugInfo({ status: 'Completing recording with final transcript' })
           completeRecording(finalTranscript + interimTranscript)
         }
       }
@@ -78,22 +61,18 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       recognitionRef.current.onerror = (event) => {
         console.error('Speech recognition error:', event.error)
         setRecordingError(`Speech recognition error: ${event.error}`)
-        updateDebugInfo({ status: 'Speech recognition error', error: event.error })
         
         // If speech recognition fails but we have audio, still complete the recording
         if (pendingCompleteRef.current && audioChunksRef.current.length > 0) {
-          updateDebugInfo({ status: 'Completing recording despite speech recognition error' })
           completeRecording(latestTranscriptRef.current)
         }
       }
 
       recognitionRef.current.onend = () => {
         setIsRecognitionStopped(true)
-        updateDebugInfo({ status: 'Speech recognition ended' })
         
         // If recognition ended unexpectedly but we have audio, complete the recording
         if (pendingCompleteRef.current && audioChunksRef.current.length > 0) {
-          updateDebugInfo({ status: 'Completing recording after recognition ended' })
           completeRecording(latestTranscriptRef.current)
         }
       }
@@ -121,18 +100,12 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
   }
 
   const completeRecording = (finalTranscript) => {
-    updateDebugInfo({ 
-      status: 'Completing recording',
-      audioChunksCount: audioChunksRef.current.length,
-      transcriptLength: finalTranscript?.length || 0
-    })
     
     if (audioChunksRef.current.length > 0) {
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
       onRecordingComplete(audioBlob, finalTranscript || '')
-      updateDebugInfo({ status: 'Recording completed successfully' })
     } else {
-      updateDebugInfo({ status: 'No audio chunks available' })
+      onRecordingComplete(null, finalTranscript || '') // No audio, but transcript
     }
     pendingCompleteRef.current = false
     hasFinalTranscriptRef.current = false
@@ -144,7 +117,6 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
     setRecordingError('')
     setTranscript('')
     hasFinalTranscriptRef.current = false
-    updateDebugInfo({ status: 'Starting recording...' })
     
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -156,11 +128,6 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       })
       
       streamRef.current = stream
-      updateDebugInfo({ 
-        status: 'Stream obtained',
-        streamTracks: stream.getTracks().length,
-        audioChunks: 0
-      })
       
       // Start MediaRecorder for audio recording
       mediaRecorderRef.current = new MediaRecorder(stream)
@@ -169,26 +136,16 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data)
-          updateDebugInfo({ 
-            audioChunks: audioChunksRef.current.length,
-            lastChunkSize: event.data.size
-          })
         }
       }
 
       mediaRecorderRef.current.onstop = () => {
         setIsAudioStopped(true)
-        updateDebugInfo({ 
-          status: 'Audio stopped',
-          totalAudioChunks: audioChunksRef.current.length,
-          pendingComplete: pendingCompleteRef.current
-        })
         
         // If speech recognition didn't produce a final result, complete with current transcript
         if (pendingCompleteRef.current) {
           setTimeout(() => {
             if (pendingCompleteRef.current) {
-              updateDebugInfo({ status: 'Completing recording with timeout' })
               completeRecording(latestTranscriptRef.current)
             }
           }, 1000) // Wait 1 second for any pending recognition results
@@ -198,27 +155,21 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       mediaRecorderRef.current.onerror = (event) => {
         console.error('MediaRecorder error:', event)
         setRecordingError('Audio recording failed. Please try again.')
-        updateDebugInfo({ status: 'MediaRecorder error', error: event.error })
       }
 
       // Start recording
       mediaRecorderRef.current.start()
       setIsRecording(true)
       setRecordingTime(0)
-      updateDebugInfo({ status: 'Recording started' })
 
       // Start speech recognition
       if (recognitionRef.current) {
         try {
           recognitionRef.current.start()
-          updateDebugInfo({ status: 'Speech recognition started' })
         } catch (error) {
           console.error('Failed to start speech recognition:', error)
           setRecordingError('Speech recognition failed to start, but audio recording will continue.')
-          updateDebugInfo({ status: 'Speech recognition failed to start', error: error.message })
         }
-      } else {
-        updateDebugInfo({ status: 'Speech recognition not available' })
       }
 
       // Start timer
@@ -229,7 +180,6 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
     } catch (error) {
       console.error('Error starting recording:', error)
       setRecordingError('Unable to access microphone. Please check permissions and try again.')
-      updateDebugInfo({ status: 'Failed to start recording', error: error.message })
     }
   }
 
@@ -238,7 +188,6 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       setIsAudioStopped(false)
       setIsRecognitionStopped(false)
       pendingCompleteRef.current = true
-      updateDebugInfo({ status: 'Stopping recording...' })
       
       // Stop audio recording
       mediaRecorderRef.current.stop()
@@ -248,10 +197,8 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop()
-          updateDebugInfo({ status: 'Speech recognition stopped' })
         } catch (error) {
           console.error('Error stopping speech recognition:', error)
-          updateDebugInfo({ status: 'Error stopping speech recognition', error: error.message })
         }
       }
 
@@ -263,7 +210,6 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
       // Clean up stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
-        updateDebugInfo({ status: 'Stream cleaned up' })
       }
     }
   }
@@ -304,26 +250,8 @@ export default function VoiceRecorder({ isRecording, setIsRecording, onRecording
           <p className="text-red-800 text-sm">{recordingError}</p>
         </div>
       )}
-
-      {/* Debug Mode Toggle */}
-      <div className="mb-4 text-center">
-        <button
-          onClick={() => setDebugMode(!debugMode)}
-          className="text-xs text-gray-500 hover:text-gray-700 underline"
-        >
-          {debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
-        </button>
-      </div>
-
-      {/* Debug Information */}
-      {debugMode && (
-        <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-left">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">Debug Info:</h4>
-          <pre className="text-xs text-gray-600 whitespace-pre-wrap">
-            {JSON.stringify(debugInfo, null, 2)}
-          </pre>
-        </div>
-      )}
+      
+      {/* Debug Mode Toggle and Debug Info removed */}
       
       <div className="mb-6">
         {isRecording ? (
